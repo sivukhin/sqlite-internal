@@ -13,6 +13,10 @@ export function parseIndexLeafPage(
   const { data } = page;
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
+  // (see https://www.sqlite.org/fileformat.html#b_tree_pages for more details)
+  // > Let X be ((U-12)*64/255)-23. 
+  // > Let M be ((U-12)*32/255)-23 and let K be M+((P-M)%(U-4)).
+
   // Calcualte max and min local size to determine overflow
   const usableSize = header.pageSize - header.reservedSpace;
   const maxLocal = Math.floor(((usableSize - 12) * 64) / 255 - 23);
@@ -25,11 +29,16 @@ export function parseIndexLeafPage(
     let localPayloadSize = payloadSize;
     let overflow = false;
     cursor += payloadSizeBytes;
-
+    
+    // > If the payload size P is less than or equal to X then the entire payload is stored on the b-tree page.
     // Determine if it is overflow
     if (payloadSize > maxLocal) {
+      // > If P is greater than X then the number of bytes stored on the index b-tree page is K if K is less than or equal to X or M otherwise.
       localPayloadSize =
         minLocal + ((payloadSize - minLocal) % (usableSize - 4));
+      if (localPayloadSize > maxLocal) {
+          localPayloadSize = minLocal;
+      }
       overflow = true;
     }
 
